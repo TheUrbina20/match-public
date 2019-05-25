@@ -1,43 +1,72 @@
-
+# Ruby CircleCI 2.0 configuration file
+#
+# Check https://circleci.com/docs/2.0/language-ruby/ for more details
+#
 version: 2
 jobs:
   build:
-    working_directory: ~/match-public
-    parallelism: 1
-    shell: /bin/bash --login
-    environment:
-      CIRCLE_ARTIFACTS: /tmp/circleci-artifacts
-      CIRCLE_TEST_REPORTS: /tmp/circleci-test-results
     docker:
-      - image: circleci/build-image:ubuntu-14.04-XXL-upstart-1189-5614f37
-        command: /sbin/init
+      # specify the version you desire here
+      - image: circleci/ruby:2.5.3-node-browsers
         environment:
-          LANG: en_US.UTF-8
-          LC_ALL: C.UTF-8
-          LANGUAGE: C.UTF-8
+          PGHOST: 127.0.0.1
+          PGUSER: postgres
+          RAILS_ENV: test
+          RAKE_ENV: test
+      # Specify service dependencies here if necessary
+      # CircleCI maintains a library of pre-built images
+      # documented at https://circleci.com/docs/2.0/circleci-images/
+      - image: circleci/postgres:9.4
+        environment:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: mcm_test
+          POSTGRES_PASSWORD: ""
+
+
     steps:
       - checkout
-      - run: mkdir -p $CIRCLE_ARTIFACTS $CIRCLE_TEST_REPORTS
 
       # Download and cache dependencies
       - restore_cache:
           keys:
-          - v1-dep-{{ .Branch }}-
-          - v1-dep-master-
+            - v1-dependencies-{{ checksum "Gemfile.lock" }}
+            # fallback to using the latest cache if no exact match is found
+            - v1-dependencies-
+
+      - run:
+          name: Configure Bundler
+          command: |
+            echo 'export BUNDLER_VERSION=$(cat Gemfile.lock | tail -1 | tr -d " ")' >> $BASH_ENV
+            source $BASH_ENV
+            gem install bundler
       - run:
           name: install dependencies
           command: |
-            bundle install --jobs=4 --retry=3 --path vendor/bundle
+            bundle install --jobs=4 --retry=3 --no-deployment --path vendor/bundle
       - save_cache:
-          key: v1-dep-{{ .Branch }}-{{ epoch }}
           paths:
-            - vendor/bundle
+            - ./vendor/bundle
+          key: v1-dependencies-{{ checksum "Gemfile.lock" }}
 
-      - run: bin/setup
-      - run: bin/rails db:migrate RAILS_ENV=test
-      - run: bin/rails test
-      - run: bin/rails test:system
+      - run: bin/rails app:update:bin
 
+      # Database setup
+      - run:
+          name: Wait for DB
+          command: dockerize -wait tcp://localhost:5432 -timeout 1m
+
+      - run: bundle exec rake db:create
+      - run: bundle exec rake db:schema:load
+
+      # run tests!
+      - run:
+          name: run tests
+          command: bundle exec rails test
+
+      # run tests!
+      - run:
+          name: run system test
+          command: bundle exec rails test:system
 
       # collect reports
       - store_test_results:
