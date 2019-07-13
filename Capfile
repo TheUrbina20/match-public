@@ -12,8 +12,7 @@ require "capistrano/deploy"
 # require "capistrano/scm/svn"
 # install_plugin Capistrano::SCM::Svn
 # or
-require "capistrano/scm/git"
-install_plugin Capistrano::SCM::Git
+
 
 # Include tasks from other gems included in your Gemfile
 #
@@ -41,7 +40,12 @@ require 'capistrano/rails'
 require 'capistrano/bundler'
 require 'capistrano/rbenv'
 require 'capistrano/puma'
+
+require "capistrano/scm/git"
+install_plugin Capistrano::SCM::Git
 install_plugin Capistrano::Puma
+
+
 
 # Load custom tasks from `lib/capistrano/tasks` if you have any defined
 Dir.glob("lib/capistrano/tasks/*.rake").each { |r| import r }
